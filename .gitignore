@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+!.env.example
+backend/.env
+!backend/.env.example
+.idea
+data/
+frontend/node_modules/
+frontend/.next/
+*.db
