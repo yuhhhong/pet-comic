@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     def pet_dir(self) -> Path:
         return self.data_dir / "pets"
 
+    @computed_field
+    @property
+    def prompts_dir(self) -> Path:
+        return BACKEND_DIR / "prompts"
+
     def ensure_directories(self) -> None:
         for path in (self.data_dir, self.task_dir, self.pet_dir):
             path.mkdir(parents=True, exist_ok=True)

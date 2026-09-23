@@ -1,0 +1,8 @@
+prompt_id: character-card
+purpose: "根据证件照生成透明背景角色卡"
+variables:
+  - name
+  - personality
+  - species
+  - appearance_summary
+description: "使用证件照调用 images.edit，生成单只宠物、透明背景、尽量完整身体的角色卡。"

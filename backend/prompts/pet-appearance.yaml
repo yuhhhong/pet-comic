@@ -1,0 +1,6 @@
+prompt_id: pet-appearance
+purpose: "从证件照提取稳定外观"
+variables:
+  - name
+  - personality
+description: "建档时一次提交 1 到 3 张证件照，输出结构化外观和摘要。"

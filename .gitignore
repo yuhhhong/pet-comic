@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.uv-cache/
 .env
 !.env.example
 backend/.env
@@ -10,3 +11,4 @@ data/
 frontend/node_modules/
 frontend/.next/
 *.db
+AGENTS.md
