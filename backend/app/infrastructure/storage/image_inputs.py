@@ -1,19 +1,17 @@
 from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path
-
-from PIL import Image, UnidentifiedImageError
 
 from app.domain.errors import AppError
 from app.domain.pets import MAX_ID_PHOTOS, MIN_ID_PHOTOS
 from app.infrastructure.storage.artifact_store import digest, write_atomic
+from app.infrastructure.storage.image_processor import ImageProcessingError, ImageProcessor
 from app.settings import Settings
-
-_FORMATS = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}
 
 
 @dataclass(frozen=True)
 class ValidatedImage:
+    """通过格式和大小校验、准备写入本地的证件照。"""
+
     filename: str
     data: bytes
     extension: str
@@ -21,6 +19,8 @@ class ValidatedImage:
 
 @dataclass(frozen=True)
 class StoredPhoto:
+    """已保存证件照的相对路径和内容哈希。"""
+
     path: str
     input_hash: str
 
@@ -46,7 +46,23 @@ def validate_id_photos(photos: list[tuple[str, bytes]], max_image_size_mb: int) 
                 status_code=422,
                 details={"filename": label},
             )
-        validated.append(ValidatedImage(label, data, _sniff_image(data, label)))
+        try:
+            processed = ImageProcessor.prepare_upload(data)
+        except ImageProcessingError as exc:
+            raise AppError(
+                "IMAGE_TYPE_UNSUPPORTED",
+                f"无法读取证件照“{label}”，请换一张 JPG/JPEG、PNG 或 WebP（支持 MPO 照片自动转换）。",
+                status_code=422,
+                details={"filename": label},
+            ) from exc
+        if len(processed.data) > max_bytes:
+            raise AppError(
+                "IMAGE_TOO_LARGE",
+                f"证件照“{label}”转换后超过 {max_image_size_mb} MB，请缩小图片后重试。",
+                status_code=422,
+                details={"filename": label},
+            )
+        validated.append(ValidatedImage(label, processed.data, processed.extension))
     return validated
 
 
@@ -61,42 +77,16 @@ def save_id_photos(settings: Settings, pet_id: str, images: list[ValidatedImage]
 
 def assert_supported_image(path: Path) -> None:
     try:
-        with Image.open(path) as image:
-            if image.format not in _FORMATS or image.width < 1 or image.height < 1:
-                raise AppError("IMAGE_TYPE_UNSUPPORTED", "证件照不是 JPG、PNG 或 WebP。", status_code=422)
-            image.load()
-    except AppError:
-        raise
-    except (UnidentifiedImageError, OSError) as exc:
-        raise AppError("VALIDATION_ERROR", "证件照文件丢失或无法读取，请重新建档。", status_code=422) from exc
+        ImageProcessor.validate_file(path)
+    except ImageProcessingError as exc:
+        raise AppError("VALIDATION_ERROR", "证件照文件丢失、格式不受支持或无法读取，请重新建档。", status_code=422) from exc
 
 
 def ensure_png(data: bytes) -> bytes:
     try:
-        with Image.open(BytesIO(data)) as image:
-            image.load()
-            if image.format == "PNG" and data.startswith(b"\x89PNG"):
-                return data
-            buffer = BytesIO()
-            image.save(buffer, format="PNG")
-            return buffer.getvalue()
-    except (UnidentifiedImageError, OSError) as exc:
+        return ImageProcessor.ensure_png(data)
+    except ImageProcessingError as exc:
         raise AppError("IMAGE_GENERATION_FAILED", "生成的角色卡不是有效图片。", status_code=502, retryable=True) from exc
-
-
-def _sniff_image(data: bytes, label: str) -> str:
-    message = f"无法读取证件照“{label}”，请换一张 JPG、PNG 或 WebP。"
-    try:
-        with Image.open(BytesIO(data)) as image:
-            image_format = image.format
-            width, height = image.size
-            image.load()
-    except (UnidentifiedImageError, OSError) as exc:
-        raise AppError("IMAGE_TYPE_UNSUPPORTED", message, status_code=422, details={"filename": label}) from exc
-    extension = _FORMATS.get(image_format or "")
-    if extension is None or width < 1 or height < 1:
-        raise AppError("IMAGE_TYPE_UNSUPPORTED", message, status_code=422, details={"filename": label})
-    return extension
 
 
 def _safe_filename(filename: str) -> str:

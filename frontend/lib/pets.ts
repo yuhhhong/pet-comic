@@ -1,4 +1,4 @@
-import { ApiError, apiFetch } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
 
 export type PetStatus = "draft" | "ready" | "disabled";
 
@@ -111,15 +111,4 @@ export function trashPet(petId: string): Promise<PetDetail> {
 
 export function deletePet(petId: string): Promise<void> {
   return apiFetch<void>(`/pets/${petId}`, { method: "DELETE" });
-}
-
-export function describeError(error: unknown): string {
-  if (error instanceof ApiError) return error.message || "请求没有完成。";
-  return "请求没有完成，请稍后再试。";
-}
-
-export function formatWhen(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
 }

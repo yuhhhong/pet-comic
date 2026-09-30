@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.errors import AppError
 from app.domain.pets import (
-    RETRYABLE_ERROR_CODES,
+    LEGACY_RETRYABLE_ERROR_CODES,
     ArtifactKind,
     ArtifactStatus,
     PetAppearance,
@@ -28,7 +28,7 @@ from app.infrastructure.db.models import PetArtifactModel, PetProfileModel
 from app.infrastructure.db.repositories.pets import PetRepository
 from app.infrastructure.db.repositories.providers import ProviderRepository
 from app.infrastructure.storage.artifact_store import digest, pet_relative_path
-from app.infrastructure.storage.image_inputs import save_id_photos, validate_id_photos
+from app.infrastructure.storage.image_inputs import StoredPhoto, save_id_photos, validate_id_photos
 from app.settings import Settings
 from app.workflow.graph import get_pet_profile_graph
 
@@ -51,6 +51,7 @@ class PetProfileService:
         try:
             stored = save_id_photos(self.settings, pet_id, validated)
             self._insert_draft(pet_id, clean_name, clean_personality, stored)
+            # 工作流使用独立会话，调用模型前必须先提交档案和证件照记录。
             self.session.commit()
         except Exception:
             self.session.rollback()
@@ -176,6 +177,7 @@ class PetProfileService:
             status=ArtifactStatus.FAILED.value,
             error_code="INTERNAL_ERROR",
             error_message="建档过程中断，请重试。",
+            retryable=True,
             artifact_id=str(uuid4()),
         )
         pet.updated_at = utcnow()
@@ -186,7 +188,7 @@ class PetProfileService:
         if missing:
             raise missing_provider_error(missing)
 
-    def _insert_draft(self, pet_id: str, name: str, personality: str, photos) -> None:
+    def _insert_draft(self, pet_id: str, name: str, personality: str, photos: list[StoredPhoto]) -> None:
         now = utcnow()
         self.session.add(
             PetProfileModel(
@@ -320,7 +322,8 @@ def _current_error(artifacts: list[PetArtifactModel]) -> PetErrorView | None:
     return PetErrorView(
         code=latest.error_code,
         message=latest.error_message or "建档没有完成。",
-        retryable=latest.error_code in RETRYABLE_ERROR_CODES,
+        # 旧记录没有保存此字段，只对旧数据沿用历史规则。
+        retryable=latest.retryable if latest.retryable is not None else latest.error_code in LEGACY_RETRYABLE_ERROR_CODES,
     )
 
 

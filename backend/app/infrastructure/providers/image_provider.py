@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 
 from app.domain.errors import AppError
 from app.infrastructure.providers.errors import model_call_error
+from app.infrastructure.storage.image_types import image_mime_type
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class ImageProviderAdapter:
         self._timeout = timeout
 
     async def edit(self, *, image_paths: list[Path], prompt: str, size: str, quality: str) -> bytes:
-        files = [(path.name, path.read_bytes(), _mime(path)) for path in image_paths]
+        files = [(path.name, path.read_bytes(), image_mime_type(path)) for path in image_paths]
         chosen_size = size if size in _SIZES else "1024x1024"
         chosen_quality = quality if quality in _QUALITIES else "auto"
         if chosen_size != size or chosen_quality != quality:
@@ -75,12 +76,3 @@ async def _download(url: str, timeout: float) -> bytes:
     if len(data) > _MAX_IMAGE_BYTES:
         raise AppError("IMAGE_GENERATION_FAILED", "生成的角色卡过大。", status_code=502, retryable=True)
     return data
-
-
-def _mime(path: Path) -> str:
-    return {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-    }.get(path.suffix.lower(), "application/octet-stream")

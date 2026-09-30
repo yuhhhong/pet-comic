@@ -4,6 +4,8 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
+    """SQLAlchemy 实体的共同基类，用于收集表定义。"""
+
     pass
 
 

@@ -13,6 +13,18 @@ _CAPABILITY_TOKENS = (
 )
 
 
+def provider_request_error(exc: Exception, *, secret: str) -> AppError:
+    reason = _public_reason(exc, secret)
+    status = _status_code(exc)
+    details: dict = {}
+    if status is not None:
+        details["status_code"] = status
+    if reason:
+        details["reason"] = reason
+    message = f"无法获取模型列表：{reason}" if reason else "无法获取模型列表。"
+    return AppError("PROVIDER_REQUEST_FAILED", message, status_code=502, details=details, retryable=_is_retryable(exc, status))
+
+
 def model_call_error(
     exc: Exception,
     *,

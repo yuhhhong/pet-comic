@@ -1,4 +1,6 @@
 class AppError(Exception):
+    """业务错误，同时携带 HTTP 状态码和可供 API 返回的错误信息。"""
+
     def __init__(
         self,
         code: str,

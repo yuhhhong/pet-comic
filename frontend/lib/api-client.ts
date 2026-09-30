@@ -56,3 +56,8 @@ function parseJson(text: string): unknown {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+export function describeError(error: unknown): string {
+  if (error instanceof ApiError) return error.message || "请求没有完成。";
+  return "请求没有完成，请稍后再试。";
+}

@@ -15,6 +15,8 @@ _VARIABLE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
 @dataclass(frozen=True)
 class PromptTemplate:
+    """从 YAML 元数据和 Markdown 正文加载的提示词版本。"""
+
     prompt_id: str
     purpose: str
     description: str
@@ -39,6 +41,8 @@ class PromptTemplate:
 
 
 class PromptRegistry:
+    """按提示词 ID 加载、校验模板及变量声明。"""
+
     def __init__(self, directory: Path) -> None:
         self.directory = directory
 

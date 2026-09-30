@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.domain.errors import AppError
 from app.infrastructure.providers.errors import model_call_error
+from app.infrastructure.storage.image_types import image_mime_type
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class StructuredResult:
-    value: Any
+class StructuredResult[T: BaseModel]:
+    """结构化模型结果及调用用量，T 是解析后的 Pydantic 类型。"""
+
+    value: T
     usage: dict[str, int]
     model: str
 
@@ -36,14 +39,14 @@ class LangChainResponsesProvider:
             use_responses_api=True,
         )
 
-    async def parse(self, *, prompt: str, images: list[Path], schema: type[BaseModel]) -> StructuredResult:
+    async def parse[T: BaseModel](self, *, prompt: str, images: list[Path], schema: type[T]) -> StructuredResult[T]:
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
         for path in images:
             encoded = base64.b64encode(path.read_bytes()).decode("ascii")
             content.append(
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:{_mime(path)};base64,{encoded}"},
+                    "image_url": {"url": f"data:{image_mime_type(path)};base64,{encoded}"},
                 }
             )
         try:
@@ -65,7 +68,7 @@ class LangChainResponsesProvider:
         return StructuredResult(value=parsed, usage=usage, model=self._model)
 
 
-def _unwrap(result: Any, schema: type[BaseModel]) -> tuple[BaseModel, Any]:
+def _unwrap[T: BaseModel](result: Any, schema: type[T]) -> tuple[T, Any]:
     if isinstance(result, schema):
         return result, None
     if isinstance(result, dict) and "parsed" in result:
@@ -103,12 +106,3 @@ def _usage(message: Any) -> dict[str, int]:
         "output_tokens": int(metadata.get("output_tokens") or 0),
         "total_tokens": int(metadata.get("total_tokens") or 0),
     }
-
-
-def _mime(path: Path) -> str:
-    return {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-    }.get(path.suffix.lower(), "application/octet-stream")

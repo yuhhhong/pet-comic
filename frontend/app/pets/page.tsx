@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PetShell, StatusBadge } from "@/components/pet-shell";
-import { describeError, formatWhen, listPets, petFileUrl, type PetStatus } from "@/lib/pets";
+import { describeError } from "@/lib/api-client";
+import { formatWhen } from "@/lib/format";
+import { listPets, petFileUrl, type PetStatus } from "@/lib/pets";
 
 const filters = [
   ["all", "全部"],

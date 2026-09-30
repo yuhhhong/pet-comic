@@ -79,6 +79,7 @@ class PetRepository:
         status: str,
         error_code: str | None = None,
         error_message: str | None = None,
+        retryable: bool | None = None,
         artifact_id: str,
     ) -> PetArtifactModel:
         row = PetArtifactModel(
@@ -91,6 +92,7 @@ class PetRepository:
             status=status,
             error_code=error_code,
             error_message=error_message,
+            retryable=retryable,
             created_at=utcnow(),
         )
         self.session.add(row)

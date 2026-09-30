@@ -1,23 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { PetShell, StatusBadge } from "@/components/pet-shell";
-import {
-  deletePet,
-  describeError,
-  formatWhen,
-  getPet,
-  petFileUrl,
-  retryCharacterCard,
-  retryPet,
-  trashPet,
-  updatePet,
-  type PetAppearance,
-  type PetDetail,
-} from "@/lib/pets";
+import { usePetActions } from "@/hooks/use-pet-actions";
+import { describeError } from "@/lib/api-client";
+import { formatWhen } from "@/lib/format";
+import { getPet, petFileUrl, type PetAppearance } from "@/lib/pets";
 
 const appearanceFields: [keyof PetAppearance, string][] = [
   ["species", "物种"],
@@ -31,61 +22,18 @@ const appearanceFields: [keyof PetAppearance, string][] = [
 export default function PetDetailPage() {
   const params = useParams<{ petId: string }>();
   const petId = params.petId;
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const petQuery = useQuery({ queryKey: ["pet", petId], queryFn: () => getPet(petId), enabled: Boolean(petId) });
   const [name, setName] = useState("");
   const [personality, setPersonality] = useState("");
   const [confirmTrash, setConfirmTrash] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { save, retry, retryCard, setEnabled, trash, remove, busy, actionError, clearActionError } = usePetActions(petId);
 
   useEffect(() => {
     if (!petQuery.data) return;
     setName(petQuery.data.name);
     setPersonality(petQuery.data.personality);
   }, [petQuery.data]);
-
-  function publish(pet: PetDetail) {
-    queryClient.setQueryData(["pet", pet.pet_id], pet);
-    void queryClient.invalidateQueries({ queryKey: ["pets"] });
-    setActionError(pet.error?.message ?? null);
-  }
-
-  const save = useMutation({
-    mutationFn: () => updatePet(petId, { name, personality }),
-    onSuccess: publish,
-    onError: (error) => setActionError(describeError(error)),
-  });
-  const retry = useMutation({
-    mutationFn: () => retryPet(petId),
-    onSuccess: publish,
-    onError: (error) => setActionError(describeError(error)),
-  });
-  const retryCard = useMutation({
-    mutationFn: () => retryCharacterCard(petId),
-    onSuccess: publish,
-    onError: (error) => setActionError(describeError(error)),
-  });
-  const setEnabled = useMutation({
-    mutationFn: (enabled: boolean) => updatePet(petId, { enabled }),
-    onSuccess: publish,
-    onError: (error) => setActionError(describeError(error)),
-  });
-  const trash = useMutation({
-    mutationFn: () => trashPet(petId),
-    onSuccess: publish,
-    onError: (error) => setActionError(describeError(error)),
-  });
-  const remove = useMutation({
-    mutationFn: () => deletePet(petId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["pets"] });
-      router.push("/pets");
-    },
-    onError: (error) => setActionError(describeError(error)),
-  });
-  const busy = save.isPending || retry.isPending || retryCard.isPending || setEnabled.isPending || trash.isPending || remove.isPending;
 
   if (petQuery.isLoading) {
     return <PetShell><p className="text-sm text-stone-500">正在读取档案…</p></PetShell>;
@@ -102,7 +50,8 @@ export default function PetDetailPage() {
   const pet = petQuery.data;
   const deleted = Boolean(pet.deleted_at);
   const appearanceReady = Boolean(pet.appearance_summary);
-  const activeCard = pet.character_cards.find((card) => card.artifact_id === pet.active_character_card_id) ?? pet.character_cards.find((card) => card.path);
+  const cards = pet.character_cards.filter((card) => card.path);
+  const activeCard = pet.character_cards.find((card) => card.artifact_id === pet.active_character_card_id) ?? cards[0];
 
   return (
     <PetShell>
@@ -132,9 +81,9 @@ export default function PetDetailPage() {
               <div className="grid aspect-square place-items-center text-sm text-stone-500">还没有角色卡</div>
             )}
           </figure>
-          {pet.character_cards.filter((card) => card.path).length > 1 ? (
+          {cards.length > 1 ? (
             <div className="flex gap-3 overflow-x-auto">
-              {pet.character_cards.filter((card) => card.path).map((card) => (
+              {cards.map((card) => (
                 <div key={card.artifact_id} className="w-24 shrink-0">
                   <img src={petFileUrl(pet.pet_id, card.path) ?? ""} alt={`角色卡 v${card.version}`} className="checker aspect-square w-full rounded-lg object-contain" />
                   <p className="mt-1 text-center text-xs text-stone-500">{card.artifact_id === pet.active_character_card_id ? "当前" : `v${card.version}`}</p>
@@ -177,8 +126,8 @@ export default function PetDetailPage() {
               className="grid gap-3 rounded-xl border border-stone-200 bg-white p-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                setActionError(null);
-                save.mutate();
+                clearActionError();
+                save.mutate({ name, personality });
               }}
             >
               <label className="grid gap-1 text-sm">
@@ -196,18 +145,18 @@ export default function PetDetailPage() {
           ) : null}
           <div className="flex flex-wrap gap-2">
             {!deleted && !appearanceReady ? (
-              <button type="button" disabled={busy} onClick={() => { setActionError(null); retry.mutate(); }} className="rounded-lg bg-rose-600 px-3 py-2 text-sm text-white disabled:opacity-60">重试建档</button>
+              <button type="button" disabled={busy} onClick={() => { clearActionError(); retry.mutate(); }} className="rounded-lg bg-rose-600 px-3 py-2 text-sm text-white disabled:opacity-60">重试建档</button>
             ) : null}
             {!deleted && appearanceReady ? (
-              <button type="button" disabled={busy} onClick={() => { setActionError(null); retryCard.mutate(); }} className="rounded-lg bg-rose-600 px-3 py-2 text-sm text-white disabled:opacity-60">
+              <button type="button" disabled={busy} onClick={() => { clearActionError(); retryCard.mutate(); }} className="rounded-lg bg-rose-600 px-3 py-2 text-sm text-white disabled:opacity-60">
                 {pet.status === "draft" ? "重试角色卡" : "重新生成角色卡"}
               </button>
             ) : null}
             {!deleted && pet.status === "ready" ? (
-              <button type="button" disabled={busy} onClick={() => { setActionError(null); setEnabled.mutate(false); }} className="rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-60">停用</button>
+              <button type="button" disabled={busy} onClick={() => { clearActionError(); setEnabled.mutate(false); }} className="rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-60">停用</button>
             ) : null}
             {!deleted && pet.status === "disabled" ? (
-              <button type="button" disabled={busy} onClick={() => { setActionError(null); setEnabled.mutate(true); }} className="rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-60">启用</button>
+              <button type="button" disabled={busy} onClick={() => { clearActionError(); setEnabled.mutate(true); }} className="rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-60">启用</button>
             ) : null}
             {!deleted ? (
               <button type="button" disabled={busy} onClick={() => confirmTrash ? trash.mutate() : setConfirmTrash(true)} className="rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-60">

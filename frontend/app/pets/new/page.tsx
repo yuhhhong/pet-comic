@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
 import { PetShell } from "@/components/pet-shell";
 import { ApiError } from "@/lib/api-client";
-import { createPet, describeError } from "@/lib/pets";
+import { describeError } from "@/lib/api-client";
+import { createPet } from "@/lib/pets";
 
 type Preview = { file: File; url: string };
 
