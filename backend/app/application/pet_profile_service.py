@@ -107,8 +107,9 @@ class PetProfileService:
     def trash(self, pet_id: str) -> PetDetail:
         pet = self._require(pet_id, allow_deleted=True)
         if pet.deleted_at is None:
-            pet.deleted_at = utcnow()
-            pet.updated_at = pet.deleted_at
+            now = utcnow()
+            pet.deleted_at = now
+            pet.updated_at = now
             self.session.commit()
         return self._detail(pet.pet_id)
 

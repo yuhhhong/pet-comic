@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from langgraph.graph import END, START, StateGraph
 
 from app.workflow.nodes.pet_profile import (
@@ -7,9 +9,6 @@ from app.workflow.nodes.pet_profile import (
     validate_pet_input,
 )
 from app.workflow.state import PetGraphState
-
-_graph = None
-
 
 def _route(next_node: str):
     def route(state: PetGraphState) -> str:
@@ -42,8 +41,6 @@ def build_pet_profile_graph():
     return graph.compile()
 
 
+@lru_cache(maxsize=1)
 def get_pet_profile_graph():
-    global _graph
-    if _graph is None:
-        _graph = build_pet_profile_graph()
-    return _graph
+    return build_pet_profile_graph()
